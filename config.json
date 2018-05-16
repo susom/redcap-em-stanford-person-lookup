@@ -1,0 +1,134 @@
+{
+  "name": "Stanford Person Lookup",
+
+  "namespace":"Stanford\\SPL",
+
+  "description": "A module for looking up people at Stanford",
+
+  "versions": [
+    { "0.1": "Initial Development Version" }
+  ],
+
+  "authors": [
+    {
+      "name": "Andy Martin",
+      "email": "andy123@stanford.edu",
+      "institution": "Stanford University"
+    }
+  ],
+
+  "permissions": [
+  ],
+
+  "links": {
+    "control-center": [
+      {
+        "name": "SPL Config",
+        "icon": "gear",
+        "url": "config_editor"
+      },
+      {
+        "name": "SPL Test",
+        "icon": "gear",
+        "url": "lookup.php"
+      }
+
+    ],
+    "project": [
+    ]
+  },
+
+  "system-settings": [
+    {
+      "key": "dev-mode",
+      "name": "<b>Enable Dev-Mode</b><br>This turns on module-logging and potentially other features",
+      "required": false,
+      "type": "checkbox"
+    },
+    {
+      "key": "api_person_url",
+      "name": "<b>MAIS Person API</b><br>e.g. https://registry-uat.stanford.edu/doc/person/",
+      "required": true,
+      "type": "text",
+      "source": "config.js",
+      "functionName": "SPL.init"
+    },
+    {
+      "key": "mais_certificate",
+      "name": "<b>MAIS Certificate</b>",
+      "required": true,
+      "type": "textarea"
+    },
+    {
+      "key": "mais_key",
+      "name": "<b>MAIS Key</b>",
+      "required": true,
+      "type": "textarea"
+    },
+    {
+      "key": "cache_method",
+      "name": "<b>Cache Method</b><br>Either 'db' for database or 'file' for file",
+      "default": "db",
+      "choices":[
+        {
+          "name" : "Database",
+          "value" : "db"
+        },
+        {
+          "name" : "File System (in temp dir)",
+          "value" : "file"
+        }
+      ],
+      "required": true,
+      "type": "radio"
+    },
+    {
+      "key": "cache_expiry",
+      "name": "<b>Cache Expiry</b><br>Enter the number of seconds for cached entries to live (e.g. 86400 for one day)",
+      "default": "86400",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "ext_desc",
+      "name": "External Access to this can be provided via a public API url.  Each app using this for lookups should be configured below with its own settings",
+      "type": "sub_settings",
+      "repeatable":true,
+      "sub_settings":[
+        {
+          "key": "token",
+          "name": "<b>URL Token</b><br>Post to API url with token=XXXX to identify this application",
+          "required": true,
+          "type": "text"
+        },
+        {
+          "key": "application",
+          "name": "<b>Application</b><br>Name of application using this token (e.g. My Lookup Sheet)",
+          "required": true,
+          "type": "text"
+        },
+        {
+          "key": "ip_cidr",
+          "name": "<b>IP CIDR Filter</b><br>An IP filter with subdomain in CIDR format can be used to restrict access (e.g. 127.0.0.1/32)",
+          "required": false,
+          "type": "text"
+        },
+        {
+          "key": "attributes",
+          "name": "<b>Directory Attributes</b><br>Enter a comma-separated list of which attributes to return: sunet,first_name,last_name,email,affiliation,department,description,relationship",
+          "type": "textarea",
+          "required": true
+        },
+        {
+          "key": "override_cache_expiry_in_sec",
+          "name": "<b>Override Expiry</b></br>You can override the default expiry for this token in seconds (e.g. 60)",
+          "type": "text",
+          "required": false
+        }
+      ]
+    }
+  ],
+
+  "project-settings": [
+  ]
+}
