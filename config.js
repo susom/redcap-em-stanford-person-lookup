@@ -1,6 +1,5 @@
 var SPL = SPL || {};
 
-
 SPL.init = function(setting) {
 
     // Get the width of the config table (based on current browser width)

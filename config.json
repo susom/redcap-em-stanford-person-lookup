@@ -23,16 +23,10 @@
   "links": {
     "control-center": [
       {
-        "name": "SPL Config",
+        "name": "SPL Lookup",
         "icon": "gear",
-        "url": "config_editor"
-      },
-      {
-        "name": "SPL Test",
-        "icon": "gear",
-        "url": "lookup.php"
+        "url": "spl_test.php"
       }
-
     ],
     "project": [
     ]
@@ -49,9 +43,7 @@
       "key": "api_person_url",
       "name": "<b>MAIS Person API</b><br>e.g. https://registry-uat.stanford.edu/doc/person/",
       "required": true,
-      "type": "text",
-      "source": "config.js",
-      "functionName": "SPL.init"
+      "type": "text"
     },
     {
       "key": "mais_certificate",
@@ -80,7 +72,9 @@
         }
       ],
       "required": true,
-      "type": "radio"
+      "type": "radio",
+      "source": "config.js",
+      "functionName": "SPL.init"
     },
     {
       "key": "cache_expiry",

@@ -6,23 +6,6 @@ include_once "classes/SPLUtils.php";
 use DateTime;
 use Exception;
 
-/*
- *
- *  THIS MODULE USES A DB TABLE TO STORE THE CACHED RESULTS
- *
-
-CREATE TABLE stanford_person_lookup_cache
-(
-id VARCHAR(100) PRIMARY KEY,
-result TEXT DEFAULT NULL,
-date_cached DATETIME DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-ALTER TABLE redcap_stanford_person_lookup COMMENT = 'A cache for the Stanford Person Lookup';
-
-*/
-
-
 
 /**
  * Class SPL
@@ -33,27 +16,21 @@ ALTER TABLE redcap_stanford_person_lookup COMMENT = 'A cache for the Stanford Pe
  */
 class SPL extends \ExternalModules\AbstractExternalModule
 {
-    // static $api_person_url = "https://registry-uat.stanford.edu/doc/person/";
-    static $api_person_url; // = "https://registry.stanford.edu/doc/person/";
-    // static $cert_name;      //      = "uat-server.cert";
-    // static $key_name;       //      = "mais.key";
-    static $cert;      //      = "uat-server.cert";
-    static $key;       //      = "mais.key";
-
+    // static $api_person_url  =
+    static $api_person_url; // = "https://registry.stanford.edu/doc/person/" or "https://registry-uat.stanford.edu/doc/person/";
+    static $cert;           // = "text from uat-server.cert";
+    static $key;            // = "text from mais.key";
 
     static $cache_dir = APP_PATH_TEMP;
     static $cache_table = "stanford_person_lookup_cache";
-    static $cache_expiry;   //   = 86400; //seconds in one day
+    static $cache_expiry = 86400;   //seconds in one day
     static $cache_method;   //   = 'db'; // 'db' or 'file';
+    static $config;         // Holds the API token settings
 
-    static $config;     // Holds the ace editor settings for tokens
-
-    // public $config;
     public $token_params;
     public $person = array();   //$first_name, $last_name, $email, $affiliation, $department, $description, $relationship;
 
-    public $cache_result;       // Used to store results of cache lookup
-    private $time_start;    // Used for logging duration of query
+    public $cache_result;   // Used to store results of cache lookup
 
     public $errors = array();
 
@@ -61,102 +38,25 @@ class SPL extends \ExternalModules\AbstractExternalModule
     {
         parent::__construct();
 
-        // self::log(__METHOD__);
-        // Set up object
-        // self::$config = json_decode($this->getConfigAsString(), true);
-        self::$config = $this->buildConfigFromSettings();
-        self::$api_person_url = $this->getSystemSetting('api_person_url');
-        self::$cert = $this->getSystemSetting('mais_certificate');
-        self::$key = $this->getSystemSetting('mais_key');
-        self::$cache_method = $this->getSystemSetting('cache_method');
-        self::$cache_expiry = $this->getSystemSetting('cache_expiry');
-
-        self::log("Cache table exists?", self::cacheTableExists());
-    }
-
-    public static function cacheTableExists() {
-        $result = db_result(db_query("SELECT 1 FROM " . self::$cache_table . " LIMIT 1"),0);
-        return (bool) $result;
+        // // Set up object
+        // self::$config = $this->buildConfigFromSettings();
+        // self::$api_person_url = $this->getSystemSetting('api_person_url');
+        // self::$cert = $this->getSystemSetting('mais_certificate');
+        // self::$key = $this->getSystemSetting('mais_key');
+        // self::$cache_method = $this->getSystemSetting('cache_method');
+        // self::$cache_expiry = $this->getSystemSetting('cache_expiry');
     }
 
 
-    function redcap_module_configure_button_display($project_id = null) {
-        ?>
-            <script type="text/javascript">
-                var SPL = SPL || {};
-                SPL.apiUrl = <?php echo json_encode($this->getUrl('lookup.php', true, true)) ?>;
-                SPL.dbTableExists = <?php echo json_encode(self::cacheTableExists()) ?>;
-            </script>
-            <style>
-                pre {font-size: 11px;}
-            </style>
-        <?php
-        return true;
-    }
-
-    public function redcap_module_system_enable($version) {
-        self::log("Enabled at $version");
-    }
-
-    public function buildConfigFromSettings() {
-        $s = $this->getSystemSettings();
-        $tokens = array();
-        foreach ($s['token']['value'] as $i => $token) {
-            $application = $s['application']['value'][$i];
-            $ip_cidr = $s['ip_cidr']['value'][$i];
-            $attributes = array_map('trim', explode(",", $s['attributes']['value'][$i]));
-            $override_cache_expiry_in_sec = $s['override_cache_expiry_in_sec']['value'][$i];
-
-            $tokens[$token] = array(
-                'application' => $application,
-                'ip_cidr' => $ip_cidr,
-                'attributes' => $attributes,
-                'override_cache_expiry_in_sec' => $override_cache_expiry_in_sec
-            );
-        }
-        return array('tokens' => $tokens);
-    }
-
-
-
-
-
-
-    // Validate token and write token_params
-    private static function validateToken($token) {
-        // Verify token is valid
-        $config = self::$config;    //$this->config
-
-        if (!isset($config['tokens'][$token])) {
-            // Invalid token
-            self::log("Invalid token: $token", "ERROR");
-            return false;
-        } else {
-            // Valid token
-            /*
-                "application": "stanford_profile",
-                "purpose": "Used by xxx for yyy",
-                "ip_cidr": "127.0.0.1/32",
-                "attributes": [
-                    "first_name","last_name","email","affiliation",
-                    "department","description","relationship"
-                ],
-                "override_cache_expiry_in_sec": "60"
-            */
-            $token_params = $config['tokens'][$token];
-
-            // Validate IP if specified
-            if (
-                !empty($token_params['ip_cidr']) &&
-                (SPLUtils::ipCIDRCheck($token_params['ip_cidr']) === false)
-            ) {
-                // Failed CIDR IP CHECK
-                self::log("Lookup does not match IP filter");
-                return false;
-            }
-            self::log("Token validated for " . $token_params['application']);
-            return $token_params;
-        }
+    /**
+     * Method to be called when accessing SPL from another EM
+     * @param $id
+     * @return array|mixed
+     */
+    public function personLookup($id) {
+        $this->setup();
+        $result = self::doLookup($id);
+        return $result;
     }
 
 
@@ -168,6 +68,10 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return array|bool Data or false
      */
     public function tokenLookup($token, $id) {
+
+        // Set up module
+        $this->setup();
+
         // Validate Token
         $token_params = self::validateToken($token);
         $result = array();
@@ -204,13 +108,110 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
 
     /**
-     * Method to be called when accessing SPL from another EM
-     * @param $id
-     * @return array|mixed
+     * Initialize the object - taken out of the constructor to reduce overhead
      */
-    public function PersonLookup($id) {
-        $result = self::doLookup($id);
-        return $result;
+    private function setup() {
+        // Set up object
+        self::$config = $this->buildConfigFromSettings();
+        self::$api_person_url = $this->getSystemSetting('api_person_url');
+        self::$cert = $this->getSystemSetting('mais_certificate');
+        self::$key = $this->getSystemSetting('mais_key');
+        self::$cache_method = $this->getSystemSetting('cache_method');
+        self::$cache_expiry = $this->getSystemSetting('cache_expiry');
+    }
+
+    /**
+     * Check to verify the cache table exists
+     * @return bool
+     */
+    public static function cacheTableExists() {
+        $result = db_result(db_query("SELECT 1 FROM " . self::$cache_table . " LIMIT 1"),0);
+        return (bool) $result;
+    }
+
+
+    /**
+     * Add some context to the config page to help the user-interface
+     * @param null $project_id
+     * @return bool
+     */
+    function redcap_module_configure_button_display($project_id = null) {
+        ?>
+            <script type="text/javascript">
+                var SPL = SPL || {};
+                SPL.apiUrl = <?php echo json_encode($this->getUrl('lookup.php', true, true)) ?>;
+                SPL.dbTableExists = <?php echo json_encode(self::cacheTableExists()) ?>;
+            </script>
+            <style>
+                pre {font-size: 11px;}
+            </style>
+        <?php
+        return true;
+    }
+
+
+    /**
+     * Load the repeating token data into an array of the format originally used by the ACE editor version
+     * @return array
+     */
+    public function buildConfigFromSettings() {
+        $s = $this->getSystemSettings();
+        $tokens = array();
+        foreach ($s['token']['value'] as $i => $token) {
+            $application = $s['application']['value'][$i];
+            $ip_cidr = $s['ip_cidr']['value'][$i];
+            $attributes = array_map('trim', explode(",", $s['attributes']['value'][$i]));
+            $override_cache_expiry_in_sec = $s['override_cache_expiry_in_sec']['value'][$i];
+
+            $tokens[$token] = array(
+                'application' => $application,
+                'ip_cidr' => $ip_cidr,
+                'attributes' => $attributes,
+                'override_cache_expiry_in_sec' => $override_cache_expiry_in_sec
+            );
+        }
+        return array('tokens' => $tokens);
+    }
+
+
+    /**
+     * Validate that the provided token is valid
+     * @param $token
+     * @return bool
+     */
+    private static function validateToken($token) {
+        // Verify token is valid
+        $config = self::$config;
+
+        if (!isset($config['tokens'][$token])) {
+            // Invalid token
+            self::log("Invalid token: $token", "ERROR");
+            return false;
+        } else {
+            // Valid token
+            /*
+                "application": "stanford_profile",
+                "ip_cidr": "127.0.0.1/32",
+                "attributes": [
+                    "first_name","last_name","email","affiliation",
+                    "department","description","relationship"
+                ],
+                "override_cache_expiry_in_sec": "60"
+            */
+            $token_params = $config['tokens'][$token];
+
+            // Validate IP if specified
+            if (
+                !empty($token_params['ip_cidr']) &&
+                (SPLUtils::ipCIDRCheck($token_params['ip_cidr']) === false)
+            ) {
+                // Failed CIDR IP CHECK
+                self::log("Lookup does not match IP filter");
+                return false;
+            }
+            self::log("Token validated for " . $token_params['application']);
+            return $token_params;
+        }
     }
 
 
@@ -309,9 +310,8 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
 
     /**
-     * Make API Call
-     * @param       $sunet
-     * @param array $tags
+     * Make API Call with certs.  If the certs are not cached, then cache them to temp file from em settings
+     * @param       $url
      * @return bool|mixed
      */
     private static function curlWithCert($url) {
@@ -450,6 +450,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         return true;
     }
 
+
     /**
      * Cache to database
      * @param $id
@@ -471,66 +472,6 @@ class SPL extends \ExternalModules\AbstractExternalModule
         }
         return true;
     }
-
-
-
-
-
-    // CONFIG EDITOR START //
-    /**
-     * Read the current config from a single key-value pair in the external module settings table
-     */
-    function getConfigAsString() {
-        global $project_id;
-        if ($project_id) {
-            $string_config = $this->getProjectSetting($this->PREFIX . '-config');
-        } else {
-            $string_config = $this->getSystemSetting($this->PREFIX . '-config');
-        }
-        // SurveyDashboard::log($string_config);
-        return is_null($string_config) ? "" : $string_config;
-    }
-
-    /**
-     * Set the current config to the redcap_exteral_modules_settings table as a single key-value pair
-     * @param $string_config
-     */
-    function setConfigAsString($string_config) {
-        global $project_id;
-        if ($project_id) {
-            $this->setProjectSetting($this->PREFIX . '-config', $string_config);
-        } else {
-            $this->setSystemSetting( $this->PREFIX . '-config', $string_config);
-        }
-    }
-
-    /**
-     * @return string
-     */
-    function getConfigDirections() {
-        $msg = <<<EOT
-Please enter your configuration as a valid json file.  Example syntax for each token is:
-<pre>{
-    "tokens": {
-        "12345": {
-            "application": "stanford_profile",
-            "purpose": "Used by xxx for yyy",
-            "ip_cidr": "127.0.0.1/32",
-            "attributes": [
-                "sunet","first_name","last_name","email","affiliation",
-                "department","description","relationship"
-            ],
-            "override_cache_expiry_in_sec": "60"
-        }
-    }
-}</pre>   
-EOT;
-        return $msg;
-    }
-    // CONFIG EDITOR END //
-
-
-
 
 
     // Log Wrapper
