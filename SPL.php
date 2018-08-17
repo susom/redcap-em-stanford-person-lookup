@@ -77,7 +77,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         $result = array();
         if ($token_params === false) {
             // Token is invalid
-            self::log("Token $token Invalid");
+            self::sLog("Token $token Invalid");
             $result['success'] = false;
             $result['msg'] = "Invalid Token";
         } else {
@@ -185,7 +185,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
         if (!isset($config['tokens'][$token])) {
             // Invalid token
-            self::log("Invalid token: $token", "ERROR");
+            self::sLog("Invalid token: $token", "ERROR");
             return false;
         } else {
             // Valid token
@@ -206,10 +206,10 @@ class SPL extends \ExternalModules\AbstractExternalModule
                 (SPLUtils::ipCIDRCheck($token_params['ip_cidr']) === false)
             ) {
                 // Failed CIDR IP CHECK
-                self::log("Lookup does not match IP filter");
+                self::sLog("Lookup does not match IP filter");
                 return false;
             }
-            self::log("Token validated for " . $token_params['application']);
+            self::sLog("Token validated for " . $token_params['application']);
             return $token_params;
         }
     }
@@ -234,7 +234,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
             // Try loading from MAIS
             $results = self::loadFromMais($id);
             if ($results === false) {
-                self::log("doLookup is negative for $id");
+                self::sLog("doLookup is negative for $id");
                 $src = "Not Found";
             } else {
                 $src = "MAIS API";
@@ -244,7 +244,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         }
 
         $run_ts = round((microtime(true) - $time_start) * 1000, 3);
-        self::log( "[$id]\t$src\t$run_ts ms", "INFO");
+        self::sLog( "[$id]\t$src\t$run_ts ms", "INFO");
         return $results;
     }
 
@@ -268,7 +268,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         $xml = simplexml_load_string( self::curlWithCert($url) );
         if ($xml === false) {
             // Error finding person
-            self::log("Unable to find $id in MAIS");
+            self::sLog("Unable to find $id in MAIS");
             return false;
         }
 
@@ -285,7 +285,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         );
 
         // Cache the person
-        if (self::cachePerson($id, $data) === false) self::log("Error caching $id");
+        if (self::cachePerson($id, $data) === false) self::sLog("Error caching $id");
 
         return $data;
     }
@@ -304,7 +304,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
             file_put_contents($temp_file, $contents);
         }
 
-        self::log("Temp File: " . $temp_file);
+        self::sLog("Temp File: " . $temp_file);
         return  $temp_file;
     }
 
@@ -335,7 +335,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         curl_close($ch);
 
         if ($ch_error) {
-            self::log($ch_error, "Curl in " . __METHOD__ . " failed", "ERROR");
+            self::sLog($ch_error, "Curl in " . __METHOD__ . " failed", "ERROR");
             return false;
         }
         return $ch_result;
@@ -355,7 +355,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         } elseif (self::$cache_method == 'file') {
             return self::loadFromFileCache($id, $expiry);
         } else {
-            self::log("Invalid cache method!");
+            self::sLog("Invalid cache method!");
             throw new \Exception("Invalid or missing cache method");
         }
     }
@@ -379,13 +379,13 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
                 // Check if valid
                 if ($delta < $expiry) {
-                    self::log("Using fileCache: $delta / $expiry seconds old");
+                    self::sLog("Using fileCache: $delta / $expiry seconds old");
                     return $data;
                 } else {
-                    self::log("fileCache expired: $delta / $expiry seconds old");
+                    self::sLog("fileCache expired: $delta / $expiry seconds old");
                 }
             } else {
-                self::log("Unable to determine cache_ts from data in $file", $data);
+                self::sLog("Unable to determine cache_ts from data in $file", $data);
             }
         }
         return false;
@@ -404,7 +404,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
             $data = json_decode($result, true);
             return $data;
         } else {
-            self::log("Missing or expired db cache");
+            self::sLog("Missing or expired db cache");
         }
         return false;
     }
@@ -444,7 +444,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         // Write the file to disk
         $file = self::$cache_dir . "spl_" . $id . ".json";
         if (!file_put_contents($file, json_encode($data))) {
-            self::log("Error caching to $file", "ERROR");
+            self::sLog("Error caching to $file", "ERROR");
             return false;
         };
         return true;
@@ -468,14 +468,14 @@ class SPL extends \ExternalModules\AbstractExternalModule
         );
         $result = db_query($sql);
         if (!$result) {
-            self::log("Error writing $sql",$result, "ERROR");
+            self::sLog("Error writing $sql",$result, "ERROR");
         }
         return true;
     }
 
 
     // Log Wrapper
-    public static function log() {
+    public static function sLog() {
         if (!class_exists("Stanford\Utils\Log.php")) require_once "classes/StanfordUtilsLog.php";
         call_user_func_array("Stanford\Utils\Log::log", func_get_args());
     }
