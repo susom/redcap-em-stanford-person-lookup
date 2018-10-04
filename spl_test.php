@@ -24,11 +24,11 @@ $HtmlPage->PrintHeaderExt();
 // Show the results
 
 ?>
-    <div class="panel panel-primary">
-        <div class="panel-heading">
+    <div class="card card-primary">
+        <div class="card-header">
             <?php echo $module->getModuleName() ?>
         </div>
-        <div class="panel-body">
+        <div class="card-body">
             <?php
                 if ($result === null) {
                     echo "Please enter a sunet id to test the SPL lookup module";
@@ -40,7 +40,7 @@ $HtmlPage->PrintHeaderExt();
                 }
             ?>
         </div>
-        <div class="panel-footer">
+        <div class="card-footer">
             <form method="POST" action="">
 
                 <div class="input-group">
