@@ -37,14 +37,6 @@ class SPL extends \ExternalModules\AbstractExternalModule
     public function __construct()
     {
         parent::__construct();
-
-        // // Set up object
-        // self::$config = $this->buildConfigFromSettings();
-        // self::$api_person_url = $this->getSystemSetting('api_person_url');
-        // self::$cert = $this->getSystemSetting('mais_certificate');
-        // self::$key = $this->getSystemSetting('mais_key');
-        // self::$cache_method = $this->getSystemSetting('cache_method');
-        // self::$cache_expiry = $this->getSystemSetting('cache_expiry');
     }
 
 
@@ -54,6 +46,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return array|mixed
      */
     public function personLookup($id) {
+
         $this->setup();
         $result = self::doLookup($id);
         return $result;
@@ -68,6 +61,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return array|bool Data or false
      */
     public function tokenLookup($token, $id) {
+        global $module;
 
         // Set up module
         $this->setup();
@@ -77,7 +71,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         $result = array();
         if ($token_params === false) {
             // Token is invalid
-            self::sLog("Token $token Invalid");
+            $module->emError("Token $token Invalid");
             $result['success'] = false;
             $result['msg'] = "Invalid Token";
         } else {
@@ -88,22 +82,21 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
             // Do lookup
             $lookup = self::doLookup($id, $expiry);
-            if ($lookup === false) {
+            if ($lookup["success"] === false) {
                 // unable to find
-                $result['msg'] = "$id not found";
-                $result['success'] = false;
-            } else {
+                $result = $lookup;
+           } else {
                 // filter returned attributes
                 $valid_attributes = array_flip($token_params['attributes']);
                 $data = array_intersect_key(
-                    $lookup,
+                    $lookup["user"],
                     $valid_attributes
                 );
                 $result['success'] = true;
                 $result['user'] = $data;
             }
         }
-        return $result;
+       return $result;
     }
 
 
@@ -180,12 +173,13 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return bool
      */
     private static function validateToken($token) {
+        global $module;
         // Verify token is valid
         $config = self::$config;
 
         if (!isset($config['tokens'][$token])) {
             // Invalid token
-            self::sLog("Invalid token: $token", "ERROR");
+            $module->emError("Invalid token: $token", "ERROR");
             return false;
         } else {
             // Valid token
@@ -206,10 +200,10 @@ class SPL extends \ExternalModules\AbstractExternalModule
                 (SPLUtils::ipCIDRCheck($token_params['ip_cidr']) === false)
             ) {
                 // Failed CIDR IP CHECK
-                self::sLog("Lookup does not match IP filter");
+                $module->emError("Lookup does not match IP filter");
                 return false;
             }
-            self::sLog("Token validated for " . $token_params['application']);
+            $module->emLog("Token validated for " . $token_params['application']);
             return $token_params;
         }
     }
@@ -223,6 +217,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return array|mixed
      */
     private static function doLookup($id, $override_expiry = null, $debug = false) {
+        global $module;
         $time_start = microtime(true);
         $expiry = is_null($override_expiry) ? self::$cache_expiry : intval($override_expiry);
 
@@ -234,18 +229,24 @@ class SPL extends \ExternalModules\AbstractExternalModule
             // Try loading from MAIS
             $results = self::loadFromMais($id);
             if ($results === false) {
-                self::sLog("doLookup is negative for $id");
+                $module->emError("doLookup is negative for $id");
                 $src = "Not Found";
+                $return = array("success" => false,
+                                "msg" => "doLookup is negative for $id  - $src");
             } else {
                 $src = "MAIS API";
+                $return = array("success" => true,
+                                "user" => $results);
             }
         } else {
             $src = self::$cache_method . " cache";
+            $return = array("success" => true,
+                            "user" => $results);
         }
 
         $run_ts = round((microtime(true) - $time_start) * 1000, 3);
-        self::sLog( "[$id]\t$src\t$run_ts ms", "INFO");
-        return $results;
+        $module->emLog( "[$id]\t$src\t$run_ts ms", "INFO");
+        return $return;
     }
 
 
@@ -257,7 +258,9 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @param array $tags (as specified by MAIS api)
      * @return mixed false or array of data
      */
-    private static function loadFromMais($id, $debug = false, $tags = array('name','email','affiliation')) {
+    private static function loadFromMais($id, $debug = false, $tags = array('name','email','affiliation','telephone')) {
+        global $module;
+
         // Build url for this service
         $url = self::$api_person_url . $id;
 
@@ -268,7 +271,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         $xml = simplexml_load_string( self::curlWithCert($url) );
         if ($xml === false) {
             // Error finding person
-            self::sLog("Unable to find $id in MAIS");
+            $module->emError("Unable to find $id in MAIS");
             return false;
         }
 
@@ -278,6 +281,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
             'first_name'   => (string) $xml->name[0]->first[0],
             'last_name'    => (string) $xml->name[0]->last[0],
             'email'        => (string) $xml->email[0],
+            'telephone'    => (string) $xml->telephone[0],
             'affiliation'  => (string) $xml->affiliation[0],
             'department'   => (string) $xml->affiliation[0]->department[0],
             'description'  => (string) $xml->affiliation[0]->description[0],
@@ -285,7 +289,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         );
 
         // Cache the person
-        if (self::cachePerson($id, $data) === false) self::sLog("Error caching $id");
+        if (self::cachePerson($id, $data) === false) $module->emError("Error caching $id");
 
         return $data;
     }
@@ -297,6 +301,8 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return string'
      */
     private static function verifyTempFile($contents) {
+        global $module;
+
         $hash = sha1($contents);
         $temp_file = APP_PATH_TEMP . date('YmdH') . "0000_SPL_" . $hash;
         if  (!file_exists($temp_file)) {
@@ -304,7 +310,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
             file_put_contents($temp_file, $contents);
         }
 
-        self::sLog("Temp File: " . $temp_file);
+        $module->emLog("Temp File: " . $temp_file);
         return  $temp_file;
     }
 
@@ -315,6 +321,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return bool|mixed
      */
     private static function curlWithCert($url) {
+        global $module;
 
         // Verify that cert and key files exist
         $cert_file = self::verifyTempFile(self::$cert);
@@ -335,7 +342,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
         curl_close($ch);
 
         if ($ch_error) {
-            self::sLog($ch_error, "Curl in " . __METHOD__ . " failed", "ERROR");
+            $module->emError($ch_error, "Curl in " . __METHOD__ . " failed", "ERROR");
             return false;
         }
         return $ch_result;
@@ -350,12 +357,14 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return array
      */
     private static function loadFromCache($id, $expiry) {
+        global $module;
+
         if (self::$cache_method == 'db') {
             return self::loadFromDbCache($id, $expiry);
         } elseif (self::$cache_method == 'file') {
             return self::loadFromFileCache($id, $expiry);
         } else {
-            self::sLog("Invalid cache method!");
+            $module->emError("Invalid cache method!");
             throw new \Exception("Invalid or missing cache method");
         }
     }
@@ -368,6 +377,8 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return mixed (false or array of data)
      */
     private static function loadFromFileCache($id, $expiry) {
+        global $module;
+
         $file = self::$cache_dir . "spl_" . $id . ".json";
 
         if (file_exists($file)) {
@@ -379,13 +390,13 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
                 // Check if valid
                 if ($delta < $expiry) {
-                    self::sLog("Using fileCache: $delta / $expiry seconds old");
+                    $module->emLog("Using fileCache: $delta / $expiry seconds old");
                     return $data;
                 } else {
-                    self::sLog("fileCache expired: $delta / $expiry seconds old");
+                    $module->emLog("fileCache expired: $delta / $expiry seconds old");
                 }
             } else {
-                self::sLog("Unable to determine cache_ts from data in $file", $data);
+                $module->emError("Unable to determine cache_ts from data in $file", $data);
             }
         }
         return false;
@@ -394,6 +405,8 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
     /** Try to load the person from the db cache */
     private static function loadFromDbCache($id, $expiry) {
+        global $module;
+
         $sql = sprintf(
             "select result from %s where id = '%s' AND (UNIX_TIMESTAMP() - UNIX_TIMESTAMP(`date_cached`)) < %d;",
             self::$cache_table, db_real_escape_string($id), intval($expiry)
@@ -404,7 +417,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
             $data = json_decode($result, true);
             return $data;
         } else {
-            self::sLog("Missing or expired db cache");
+            $module->emError("Missing or expired db cache");
         }
         return false;
     }
@@ -441,10 +454,12 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return bool
      */
     private static function fileCachePerson($id, $data) {
+        global $module;
+
         // Write the file to disk
         $file = self::$cache_dir . "spl_" . $id . ".json";
         if (!file_put_contents($file, json_encode($data))) {
-            self::sLog("Error caching to $file", "ERROR");
+            $module->emError("Error caching to $file", "ERROR");
             return false;
         };
         return true;
@@ -458,6 +473,8 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return bool
      */
     private static function dbCachePerson($id, $data) {
+        global $module;
+
         $date_cached =  $data['cache_ts'];
         $data = json_encode($data);
         $sql = sprintf(
@@ -468,16 +485,36 @@ class SPL extends \ExternalModules\AbstractExternalModule
         );
         $result = db_query($sql);
         if (!$result) {
-            self::sLog("Error writing $sql",$result, "ERROR");
+            $module->emError("Error writing $sql",$result, "ERROR");
         }
         return true;
     }
 
+    /**
+     * Function to log messages
+     */
+    function emLog() {
+        $emLogger = \ExternalModules\ExternalModules::getModuleInstance('em_logger');
+        $emLogger->emLog($this->PREFIX, func_get_args(), "INFO");
+    }
 
-    // Log Wrapper
-    public static function sLog() {
-        if (!class_exists("Stanford\Utils\Log.php")) require_once "classes/StanfordUtilsLog.php";
-        call_user_func_array("Stanford\Utils\Log::log", func_get_args());
+    /**
+     *  Function to log debug messages
+     */
+    function emDebug() {
+        // Check if debug enabled
+        if ($this->getSystemSetting('enable-system-debug-logging') || $this->getProjectSetting('enable-project-debug-logging')) {
+            $emLogger = \ExternalModules\ExternalModules::getModuleInstance('em_logger');
+            $emLogger->emLog($this->PREFIX, func_get_args(), "DEBUG");
+        }
+    }
+
+    /*
+     * Function to log error messages
+     */
+    function emError() {
+        $emLogger = \ExternalModules\ExternalModules::getModuleInstance('em_logger');
+        $emLogger->emLog($this->PREFIX, func_get_args(), "ERROR");
     }
 
 }

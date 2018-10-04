@@ -16,6 +16,7 @@ class Log
     /**
      * A generic logging function
      */
+    /*
     public static function log() {
         // Get the log path if configured
         if (!empty($GLOBALS['external_module_log_path'])) {
@@ -91,6 +92,7 @@ class Log
             // Skip Logging
         }
     }
+    */
 
     private static function generateCallTrace()
     {
