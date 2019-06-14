@@ -8,8 +8,10 @@ use DOMAttr;
 class SPLUtils
 {
 
-    // Checks if the IP is valid given an IP or CIDR range
-    // e.g. 192.168.123.1 = 192.168.123.1/30
+    /**
+    * Checks if the IP is valid given an IP or CIDR range
+    * e.g. 192.168.123.1 = 192.168.123.1/30
+    */
     public static function ipCIDRCheck ($CIDR) {
         $ip = trim($_SERVER['REMOTE_ADDR']);
 
@@ -208,8 +210,6 @@ class SPLUtils
             echo $dump;
         }
     }
-
-
 
 
     /**

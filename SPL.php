@@ -3,6 +3,8 @@ namespace Stanford\SPL;
 
 include_once "classes/SPLUtils.php";
 
+include_once "emLoggerTrait.php";
+
 use DateTime;
 use Exception;
 
@@ -16,6 +18,9 @@ use Exception;
  */
 class SPL extends \ExternalModules\AbstractExternalModule
 {
+
+    use emLoggerTrait;
+
     // static $api_person_url  =
     static $api_person_url; // = "https://registry.stanford.edu/doc/person/" or "https://registry-uat.stanford.edu/doc/person/";
     static $cert;           // = "text from uat-server.cert";
@@ -215,6 +220,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @param null $override_expiry
      * @param bool $debug
      * @return array|mixed
+     * @throws Exception
      */
     private static function doLookup($id, $override_expiry = null, $debug = false) {
         global $module;
@@ -252,11 +258,11 @@ class SPL extends \ExternalModules\AbstractExternalModule
 
     /**
      * Load the person by way of MAIS person API
-     *
      * @param       $id
      * @param bool  $debug
      * @param array $tags (as specified by MAIS api)
      * @return mixed false or array of data
+     * @throws Exception
      */
     private static function loadFromMais($id, $debug = false, $tags = array('name','email','affiliation','telephone')) {
         global $module;
@@ -355,6 +361,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @param $id
      * @param $expiry
      * @return array
+     * @throws Exception
      */
     private static function loadFromCache($id, $expiry) {
         global $module;
@@ -488,33 +495,6 @@ class SPL extends \ExternalModules\AbstractExternalModule
             $module->emError("Error writing $sql",$result, "ERROR");
         }
         return true;
-    }
-
-    /**
-     * Function to log messages
-     */
-    function emLog() {
-        $emLogger = \ExternalModules\ExternalModules::getModuleInstance('em_logger');
-        $emLogger->emLog($this->PREFIX, func_get_args(), "INFO");
-    }
-
-    /**
-     *  Function to log debug messages
-     */
-    function emDebug() {
-        // Check if debug enabled
-        if ( $this->getSystemSetting('enable-system-debug-logging') || ( !empty($_GET['pid']) && $this->getProjectSetting('enable-project-debug-logging'))) {
-            $emLogger = \ExternalModules\ExternalModules::getModuleInstance('em_logger');
-            $emLogger->emLog($this->PREFIX, func_get_args(), "DEBUG");
-        }
-    }
-
-    /*
-     * Function to log error messages
-     */
-    function emError() {
-        $emLogger = \ExternalModules\ExternalModules::getModuleInstance('em_logger');
-        $emLogger->emLog($this->PREFIX, func_get_args(), "ERROR");
     }
 
 }
