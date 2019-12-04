@@ -19,6 +19,9 @@
 
   "permissions": [
   ],
+  "no-auth-pages": [
+    "lookup"
+  ],
 
   "links": {
     "control-center": [
