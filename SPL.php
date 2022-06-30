@@ -134,6 +134,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
      * @return bool
      */
     function redcap_module_configure_button_display($project_id = null) {
+        /*
         ?>
             <script type="text/javascript">
                 var SPL = SPL || {};
@@ -144,6 +145,7 @@ class SPL extends \ExternalModules\AbstractExternalModule
                 pre {font-size: 11px;}
             </style>
         <?php
+        */
         return true;
     }
 
